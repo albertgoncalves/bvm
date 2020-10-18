@@ -358,6 +358,25 @@ static void test_op_not(char* buffer) {
     printf(".");
 }
 
+static void test_op_load_effective_address(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_LEA;
+    instr.r0_or_nzp = 1;
+    instr.immediate_or_offset = -195;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "1110 0011 0011 1101")) {
+        FAIL("test_op_load_effective_address (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
+    {
+        FAIL("test_op_load_effective_address");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -380,6 +399,7 @@ int main(void) {
     test_op_store_indirect(buffer);
     test_op_store_register(buffer);
     test_op_not(buffer);
+    test_op_load_effective_address(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;
