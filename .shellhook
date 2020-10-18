@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+export WD=$PWD
+
+for x in bin build; do
+    if [ ! -d "$WD/$x" ]; then
+        mkdir "$WD/$x"
+    fi
+done
+
+# NOTE: See `https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html`.
+export FLAGS=(
+    "-fshort-enums"
+    "-march=native"
+    "-mavx"
+    "-O1"
+    "-std=gnu11"
+    "-Wall"
+    "-Wcast-align"
+    "-Wcast-align=strict"
+    "-Wcast-qual"
+    "-Wconversion"
+    "-Wdate-time"
+    "-Wdouble-promotion"
+    "-Wduplicated-branches"
+    "-Wduplicated-cond"
+    "-Werror"
+    "-Wextra"
+    "-Wfatal-errors"
+    "-Wfloat-equal"
+    "-Wformat=2"
+    "-Wformat-signedness"
+    "-Winline"
+    "-Wlogical-op"
+    "-Wmissing-declarations"
+    "-Wmissing-include-dirs"
+    "-Wmissing-prototypes"
+    "-Wnested-externs"
+    "-Wno-unused-function"
+    "-Wno-unused-parameter"
+    "-Wnull-dereference"
+    "-Wpacked"
+    "-Wpedantic"
+    "-Wpointer-arith"
+    "-Wredundant-decls"
+    "-Wshadow"
+    "-Wstack-protector"
+    "-Wstrict-prototypes"
+    "-Wswitch-enum"
+    "-Wtrampolines"
+    "-Wundef"
+    "-Wunused"
+    "-Wunused-macros"
+    "-Wwrite-strings"
+)
+export FLAGS_SANITIZE=(
+    "-fsanitize=address"
+    "-fsanitize-address-use-after-scope"
+    "-fsanitize=alignment"
+    "-fsanitize=bool"
+    "-fsanitize=bounds"
+    "-fsanitize=bounds-strict"
+    "-fsanitize=builtin"
+    "-fsanitize=enum"
+    "-fsanitize=float-cast-overflow"
+    "-fsanitize=float-divide-by-zero"
+    "-fsanitize=integer-divide-by-zero"
+    "-fsanitize=leak"
+    "-fsanitize=nonnull-attribute"
+    "-fsanitize=null"
+    "-fsanitize=object-size"
+    "-fsanitize=pointer-overflow"
+    "-fsanitize=returns-nonnull-attribute"
+    "-fsanitize=shift"
+    "-fsanitize=shift-base"
+    "-fsanitize=shift-exponent"
+    "-fsanitize=signed-integer-overflow"
+    "-fsanitize=undefined"
+    "-fsanitize-undefined-trap-on-error"
+    "-fsanitize=unreachable"
+    "-fsanitize=vla-bound"
+)
+
+runc () {
+    handle=$(echo "$1" | sed 's/^[a-z\/]*\/\(.*\)\.[a-z]*$/\1/')
+    clang-format -i "$1" || return
+    cppcheck \
+        --enable=all \
+        --suppress=missingIncludeSystem \
+        "$1" \
+        || return
+    pwd_=$PWD
+    cp "$1" "$WD/build/$handle.c"
+    (
+        cd "$WD/build" || return
+        gcc \
+            -g \
+            -o "$WD/bin/${handle}_valgrind" \
+            "${FLAGS[@]}" \
+            -lm \
+            -pthread \
+            "$handle.c" \
+            || return
+        gcc \
+            -g \
+            -o "$WD/bin/${handle}_sanitize" \
+            "${FLAGS[@]}" \
+            "${FLAGS_SANITIZE[@]}" \
+            -lm \
+            -pthread \
+            "$handle.c" \
+            || return
+        cd "$pwd_" || return
+        if [ -z "$2" ]; then
+            "$WD/bin/${handle}_sanitize"
+        else
+            "$WD/bin/${handle}_sanitize" "$2"
+        fi
+    )
+}
+
+open () {
+    xdg-open "$1" > /dev/null 2>&1
+}
+
+export -f runc
+export -f open
