@@ -334,7 +334,7 @@ static void test_op_store_register(char* buffer) {
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.immediate_or_offset != get_reg_offset_6(bin_instr)))
     {
-        FAIL("test_op_store_indirect");
+        FAIL("test_op_store_register");
     }
     printf(".");
 }
@@ -351,8 +351,7 @@ static void test_op_not(char* buffer) {
     }
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
-        (instr.r1 != get_r1(bin_instr)) ||
-        (-1 != get_reg_offset_6(bin_instr)))
+        (instr.r1 != get_r1(bin_instr)) || (-1 != get_reg_offset_6(bin_instr)))
     {
         FAIL("test_op_not");
     }
