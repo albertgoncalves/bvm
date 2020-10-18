@@ -52,9 +52,9 @@ typedef enum {
 } OpCode;
 
 typedef struct {
-    u8  r0;
+    i16 pc_offset;
+    u8  r0_or_nzp;
     u8  r1;
-    u16 pc_offset;
     union {
         u8 r2;
         i8 imm_value;
@@ -110,8 +110,8 @@ static OpCode get_op(u16 instr) {
     return instr >> 12;
 }
 
-static void set_r0(u16* instr, u8 r0) {
-    *instr = (u16)(*instr | (u16)((r0 & 0x7) << 9));
+static void set_r0_or_nzp(u16* instr, u8 r0_or_nzp) {
+    *instr = (u16)(*instr | ((r0_or_nzp & 0x7) << 9));
 }
 
 static u8 get_r0(u16 instr) {
@@ -146,12 +146,49 @@ static i8 get_imm_value(u16 instr) {
     return (i8)sign_extend(instr & 0x1F, 5);
 }
 
-static void set_pc_offset(u16* instr, u16 pc_offset) {
+static void set_pc_offset_9(u16* instr, i16 pc_offset) {
     *instr = (u16)(*instr | (pc_offset & 0x1FF));
 }
 
-static u16 get_pc_offset(u16 instr) {
-    return sign_extend(instr & 0x1FF, 9);
+static i16 get_pc_offset_9(u16 instr) {
+    return (i16)sign_extend(instr & 0x1FF, 9);
+}
+
+static u8 get_neg(u16 instr) {
+    return (instr >> 11) & 0x1;
+}
+
+static u8 get_zero(u16 instr) {
+    return (instr >> 10) & 0x1;
+}
+
+static u8 get_pos(u16 instr) {
+    return (instr >> 9) & 0x1;
+}
+
+static void do_op_br(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   0   0 | N | Z | P |             PC_OFFSET             |
+    // +---------------+-----------+-----------+---+-------------------+
+    u16 r_cond = REG[R_COND];
+    if ((get_neg(instr) & r_cond) || (get_zero(instr) & r_cond) ||
+        (get_pos(instr) & r_cond))
+    {
+        REG[R_PC] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
+    }
+}
+
+static u16 get_op_br(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   0   0 |    NZP    |             PC_OFFSET             |
+    // +---------------+-----------+-----------+---+-------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_BR);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_pc_offset_9(&bin_instr, instr.pc_offset);
+    return bin_instr;
 }
 
 static void do_op_add(u16 instr) {
@@ -182,7 +219,7 @@ static u16 get_op_add(Instr instr) {
     // +---------------+-----------+-----------+---+-------+-----------+
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_ADD);
-    set_r0(&bin_instr, instr.r0);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
     set_r1(&bin_instr, instr.r1);
     if (instr.imm_mode) {
         set_imm_mode_and_value(&bin_instr, instr.opt.imm_value);
@@ -220,7 +257,7 @@ static u16 get_op_and(Instr instr) {
     // +---------------+-----------+-----------+---+-------+-----------+
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_AND);
-    set_r0(&bin_instr, instr.r0);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
     set_r1(&bin_instr, instr.r1);
     if (instr.imm_mode) {
         set_imm_mode_and_value(&bin_instr, instr.opt.imm_value);
@@ -235,9 +272,8 @@ static void do_op_load(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8  r0 = get_r0(instr);
-    u16 pc_offset = get_pc_offset(instr);
-    REG[r0] = mem_read((u16)(REG[R_PC] + pc_offset));
+    u8 r0 = get_r0(instr);
+    REG[r0] = mem_read((u16)(REG[R_PC] + get_pc_offset_9(instr)));
     set_flags(r0);
 }
 
@@ -248,8 +284,8 @@ static u16 get_op_load(Instr instr) {
     // +---------------+-----------+-----------------------------------+
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_LD);
-    set_r0(&bin_instr, instr.r0);
-    set_pc_offset(&bin_instr, instr.pc_offset);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_pc_offset_9(&bin_instr, instr.pc_offset);
     return bin_instr;
 }
 
@@ -258,9 +294,8 @@ static void do_op_load_indirect(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8  r0 = get_r0(instr);
-    u16 pc_offset = get_pc_offset(instr);
-    REG[r0] = mem_read(mem_read((u16)(REG[R_PC] + pc_offset)));
+    u8 r0 = get_r0(instr);
+    REG[r0] = mem_read(mem_read((u16)(REG[R_PC] + get_pc_offset_9(instr))));
     set_flags(r0);
 }
 
@@ -271,8 +306,8 @@ static u16 get_op_load_indirect(Instr instr) {
     // +---------------+-----------+-----------------------------------+
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_LDI);
-    set_r0(&bin_instr, instr.r0);
-    set_pc_offset(&bin_instr, instr.pc_offset);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_pc_offset_9(&bin_instr, instr.pc_offset);
     return bin_instr;
 }
 
@@ -285,7 +320,7 @@ static u16 get_op_load_indirect(Instr instr) {
 static u16 get_bin_instr(Instr instr) {
     switch (instr.op) {
     case OP_BR: {
-        NOT_IMPLEMENTED(OP_BR);
+        return get_op_br(instr);
     }
     case OP_ADD: {
         return get_op_add(instr);
@@ -307,7 +342,8 @@ static void do_bin_instr(u16 instr) {
     OpCode op = (OpCode)(instr >> 12);
     switch (op) {
     case OP_BR: {
-        NOT_IMPLEMENTED(OP_BR);
+        do_op_br(instr);
+        break;
     }
     case OP_ADD: {
         do_op_add(instr);
