@@ -258,6 +258,25 @@ static void test_op_jump_subroutine_relative(char* buffer) {
     printf(".");
 }
 
+static void test_op_store(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_ST;
+    instr.r0_or_nzp = 6;
+    instr.immediate_or_offset = -45;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "0011 1101 1101 0011")) {
+        FAIL("test_op_store (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
+    {
+        FAIL("test_op_store");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -275,6 +294,7 @@ int main(void) {
     test_op_jump(buffer);
     test_op_jump_subroutine(buffer);
     test_op_jump_subroutine_relative(buffer);
+    test_op_store(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;

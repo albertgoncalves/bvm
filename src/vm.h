@@ -36,9 +36,9 @@ typedef enum {
     OP_BR = 0, // branch
     OP_ADD,    // add
     OP_LD,     // load
-    // OP_ST,    // store
-    OP_JSR = 4, // jump register
-    OP_AND,     // bitwise and
+    OP_ST,     // store
+    OP_JSR,    // jump register
+    OP_AND,    // bitwise and
     // OP_LDR,   // load register
     // OP_STR,   // store register
     // OP_RTI,   // unused
@@ -373,6 +373,26 @@ static u16 get_op_jump(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_store(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    MEM[REG[R_PC] + get_pc_offset_9(instr)] = get_r0(instr);
+}
+
+static u16 get_op_store(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_ST);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_pc_offset_9(&bin_instr, instr.immediate_or_offset);
+    return bin_instr;
+}
+
 #define NOT_IMPLEMENTED(op)                                  \
     {                                                        \
         fprintf(stderr, "OpCode:%d not implemented!\n", op); \
@@ -389,6 +409,9 @@ static u16 get_bin_instr(Instr instr) {
     }
     case OP_LD: {
         return get_op_load(instr);
+    }
+    case OP_ST: {
+        return get_op_store(instr);
     }
     case OP_JSR: {
         return get_op_jump_subroutine(instr);
@@ -419,6 +442,10 @@ static void do_bin_instr(u16 instr) {
     }
     case OP_LD: {
         do_op_load(instr);
+        break;
+    }
+    case OP_ST: {
+        do_op_store(instr);
         break;
     }
     case OP_JSR: {
