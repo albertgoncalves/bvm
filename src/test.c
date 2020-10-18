@@ -220,6 +220,44 @@ static void test_op_jump(char* buffer) {
     printf(".");
 }
 
+static void test_op_jump_subroutine(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_JSR;
+    instr.mode = FALSE;
+    instr.r1 = 4;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "0100 0001 0000 0000")) {
+        FAIL("test_op_jump_subroutine (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.mode != get_relative_mode(bin_instr)) ||
+        (instr.r1 != get_r1(bin_instr)))
+    {
+        FAIL("test_op_jump_subroutine");
+    }
+    printf(".");
+}
+
+static void test_op_jump_subroutine_relative(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_JSR;
+    instr.mode = TRUE;
+    instr.immediate_or_offset = -500;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "0100 1110 0000 1100")) {
+        FAIL("test_op_jump_subroutine_relative (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.mode != get_relative_mode(bin_instr)) ||
+        (instr.immediate_or_offset != get_pc_offset_11(bin_instr)))
+    {
+        FAIL("test_op_jump_subroutine_relative");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -235,6 +273,8 @@ int main(void) {
     test_op_load(buffer);
     test_op_load_indirect(buffer);
     test_op_jump(buffer);
+    test_op_jump_subroutine(buffer);
+    test_op_jump_subroutine_relative(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;

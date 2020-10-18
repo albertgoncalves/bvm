@@ -37,8 +37,8 @@ typedef enum {
     OP_ADD,    // add
     OP_LD,     // load
     // OP_ST,    // store
-    // OP_JSR,   // jump register
-    OP_AND = 5, // bitwise and
+    OP_JSR = 4, // jump register
+    OP_AND,     // bitwise and
     // OP_LDR,   // load register
     // OP_STR,   // store register
     // OP_RTI,   // unused
@@ -149,6 +149,18 @@ static void set_pc_offset_9(u16* instr, i16 pc_offset) {
 
 static i16 get_pc_offset_9(u16 instr) {
     return (i16)get_sign_extend(instr & 0x1FF, 9);
+}
+
+static void set_relative_mode_and_pc_offset_11(u16* instr, i16 pc_offset) {
+    *instr = (u16)(*instr | (1 << 11) | (pc_offset & 0x7FF));
+}
+
+static Bool get_relative_mode(u16 instr) {
+    return (instr >> 11) & 0x1;
+}
+
+static i16 get_pc_offset_11(u16 instr) {
+    return (i16)get_sign_extend(instr & 0x7FF, 11);
 }
 
 static u8 get_neg(u16 instr) {
@@ -264,6 +276,39 @@ static u16 get_op_and(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_jump_subroutine(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // |               | 1 |                 PC_OFFSET                 |
+    // | 0   1   0   0 +---+-------+-----------+-----------------------+
+    // |               | 0 |  NULL |     R1    |          NULL         |
+    // +---------------+---+-------+-----------+-----------------------+
+    REG[R_7] = REG[R_PC];
+    if (get_relative_mode(instr)) {
+        REG[R_PC] = (u16)(REG[R_PC] + get_pc_offset_11(instr));
+    } else {
+        REG[R_PC] = REG[get_r1(instr)];
+    }
+}
+
+static u16 get_op_jump_subroutine(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // |               | 1 |                 PC_OFFSET                 |
+    // | 0   1   0   0 +---+-------+-----------+-----------------------+
+    // |               | 0 |  NULL |     R1    |          NULL         |
+    // +---------------+---+-------+-----------+-----------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_JSR);
+    if (instr.mode) {
+        set_relative_mode_and_pc_offset_11(&bin_instr,
+                                           instr.immediate_or_offset);
+    } else {
+        set_r1(&bin_instr, instr.r1);
+    }
+    return bin_instr;
+}
+
 static void do_op_load(u16 instr) {
     // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -345,6 +390,9 @@ static u16 get_bin_instr(Instr instr) {
     case OP_LD: {
         return get_op_load(instr);
     }
+    case OP_JSR: {
+        return get_op_jump_subroutine(instr);
+    }
     case OP_AND: {
         return get_op_and(instr);
     }
@@ -371,6 +419,10 @@ static void do_bin_instr(u16 instr) {
     }
     case OP_LD: {
         do_op_load(instr);
+        break;
+    }
+    case OP_JSR: {
+        do_op_jump_subroutine(instr);
         break;
     }
     case OP_AND: {
