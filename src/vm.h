@@ -39,7 +39,7 @@ typedef enum {
     OP_ST,     // store
     OP_JSR,    // jump register
     OP_AND,    // bitwise and
-    // OP_LDR,   // load register
+    OP_LDR,    // load register
     // OP_STR,   // store register
     // OP_RTI,   // unused
     // OP_NOT,   // bitwise not
@@ -173,6 +173,14 @@ static u8 get_zero(u16 instr) {
 
 static u8 get_pos(u16 instr) {
     return (instr >> 9) & 0x1;
+}
+
+static void set_reg_offset_6(u16* instr, i16 pc_offset) {
+    *instr = (u16)(*instr | (pc_offset & 0x3F));
+}
+
+static i16 get_reg_offset_6(u16 instr) {
+    return (i16)get_sign_extend(instr & 0x3F, 6);
 }
 
 static void do_op_branch(u16 instr) {
@@ -395,6 +403,29 @@ static u16 get_op_store(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_load_register(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   0 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    u8 r0 = get_r0(instr);
+    REG[r0] = get_mem_at((u16)(REG[get_r1(instr)] + get_reg_offset_6(instr)));
+    set_flags(r0);
+}
+
+static u16 get_op_load_register(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   0 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_LDR);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_r1(&bin_instr, instr.r1);
+    set_reg_offset_6(&bin_instr, instr.immediate_or_offset);
+    return bin_instr;
+}
+
 #define NOT_IMPLEMENTED(op)                                  \
     {                                                        \
         fprintf(stderr, "OpCode:%d not implemented!\n", op); \
@@ -420,6 +451,9 @@ static u16 get_bin_instr(Instr instr) {
     }
     case OP_AND: {
         return get_op_and(instr);
+    }
+    case OP_LDR: {
+        return get_op_load_register(instr);
     }
     case OP_LDI: {
         return get_op_load_indirect(instr);
@@ -456,6 +490,10 @@ static void do_bin_instr(u16 instr) {
     }
     case OP_AND: {
         do_op_and(instr);
+        break;
+    }
+    case OP_LDR: {
+        do_op_load_register(instr);
         break;
     }
     case OP_LDI: {
