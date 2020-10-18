@@ -299,6 +299,46 @@ static void test_op_load_register(char* buffer) {
     printf(".");
 }
 
+static void test_op_store_indirect(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_STI;
+    instr.r0_or_nzp = 1;
+    instr.immediate_or_offset = -250;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "1011 0011 0000 0110")) {
+        FAIL("test_op_store_indirect (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
+    {
+        FAIL("test_op_store_indirect");
+    }
+    printf(".");
+}
+
+static void test_op_store_register(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_STR;
+    instr.r0_or_nzp = 2;
+    instr.r1 = 3;
+    instr.immediate_or_offset = -29;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "0111 0100 1110 0011")) {
+        FAIL("test_op_store_register (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r1 != get_r1(bin_instr)) ||
+        (instr.immediate_or_offset != get_reg_offset_6(bin_instr)))
+    {
+        FAIL("test_op_store_indirect");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -318,6 +358,8 @@ int main(void) {
     test_op_jump_subroutine_relative(buffer);
     test_op_store(buffer);
     test_op_load_register(buffer);
+    test_op_store_indirect(buffer);
+    test_op_store_register(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;

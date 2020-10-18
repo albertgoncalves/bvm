@@ -40,12 +40,12 @@ typedef enum {
     OP_JSR,    // jump register
     OP_AND,    // bitwise and
     OP_LDR,    // load register
-    // OP_STR,   // store register
+    OP_STR,    // store register
     // OP_RTI,   // unused
     // OP_NOT,   // bitwise not
     OP_LDI = 10, // load indirect
-    // OP_STI,   // store indirect
-    OP_JMP = 12, // jump
+    OP_STI,      // store indirect
+    OP_JMP,      // jump
     // OP_RES,   // reserved (unused)
     // OP_LEA,   // load effective address
     // OP_TRAP,  // execute trap
@@ -426,6 +426,48 @@ static u16 get_op_load_register(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_store_indirect(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    MEM[get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)))] =
+        REG[get_r0(instr)];
+}
+
+static u16 get_op_store_indirect(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_STI);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_pc_offset_9(&bin_instr, instr.immediate_or_offset);
+    return bin_instr;
+}
+
+static void do_op_store_register(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   1 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    MEM[REG[get_r1(instr)] + get_reg_offset_6(instr)] = REG[get_r0(instr)];
+}
+
+static u16 get_op_store_register(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   1 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_STR);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_r1(&bin_instr, instr.r1);
+    set_reg_offset_6(&bin_instr, instr.immediate_or_offset);
+    return bin_instr;
+}
+
 #define NOT_IMPLEMENTED(op)                                  \
     {                                                        \
         fprintf(stderr, "OpCode:%d not implemented!\n", op); \
@@ -455,8 +497,14 @@ static u16 get_bin_instr(Instr instr) {
     case OP_LDR: {
         return get_op_load_register(instr);
     }
+    case OP_STR: {
+        return get_op_store_register(instr);
+    }
     case OP_LDI: {
         return get_op_load_indirect(instr);
+    }
+    case OP_STI: {
+        return get_op_store_indirect(instr);
     }
     case OP_JMP: {
         return get_op_jump(instr);
@@ -496,8 +544,16 @@ static void do_bin_instr(u16 instr) {
         do_op_load_register(instr);
         break;
     }
+    case OP_STR: {
+        do_op_store_register(instr);
+        break;
+    }
     case OP_LDI: {
         do_op_load_indirect(instr);
+        break;
+    }
+    case OP_STI: {
+        do_op_store_indirect(instr);
         break;
     }
     case OP_JMP: {
