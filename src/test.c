@@ -21,7 +21,7 @@ static void set_u16_to_string(char* buffer, u16 x) {
     }
 }
 
-static void test_op_br_neg(char* buffer) {
+static void test_op_branch_neg(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_NEG;
@@ -29,17 +29,17 @@ static void test_op_br_neg(char* buffer) {
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 1001 1111 0110")) {
-        FAIL("test_op_br_neg (strcmp)");
+        FAIL("test_op_branch_neg (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_neg(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
-        FAIL("test_op_br_neg");
+        FAIL("test_op_branch_neg");
     }
     printf(".");
 }
 
-static void test_op_br_zero(char* buffer) {
+static void test_op_branch_zero(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_ZERO;
@@ -47,17 +47,17 @@ static void test_op_br_zero(char* buffer) {
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 0101 1100 1101")) {
-        FAIL("test_op_br_zero (strcmp)");
+        FAIL("test_op_branch_zero (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_zero(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
-        FAIL("test_op_br_zero");
+        FAIL("test_op_branch_zero");
     }
     printf(".");
 }
 
-static void test_op_br_pos(char* buffer) {
+static void test_op_branch_pos(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_POS;
@@ -65,12 +65,12 @@ static void test_op_br_pos(char* buffer) {
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 0011 1110 0101")) {
-        FAIL("test_op_br_pos (strcmp)");
+        FAIL("test_op_branch_pos (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_pos(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
-        FAIL("test_op_br_pos");
+        FAIL("test_op_branch_pos");
     }
     printf(".");
 }
@@ -225,9 +225,9 @@ int main(void) {
     if (buffer == NULL) {
         exit(EXIT_FAILURE);
     }
-    test_op_br_neg(buffer);
-    test_op_br_zero(buffer);
-    test_op_br_pos(buffer);
+    test_op_branch_neg(buffer);
+    test_op_branch_zero(buffer);
+    test_op_branch_pos(buffer);
     test_op_add(buffer);
     test_op_add_immediate_mode(buffer);
     test_op_and(buffer);

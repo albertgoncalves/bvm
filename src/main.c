@@ -19,7 +19,7 @@ int main(void) {
     STATUS = DEAD;
     REG[R_PC] = PC_START;
     while (STATUS) {
-        do_bin_instr(mem_read(REG[R_PC]++));
+        do_bin_instr(get_mem_at(REG[R_PC]++));
         STATUS = DEAD;
     }
     printf("Done!\n");

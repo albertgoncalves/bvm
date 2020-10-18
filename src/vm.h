@@ -77,7 +77,7 @@ static Status STATUS = ALIVE;
 
 #define PC_START 0x3000
 
-static u16 sign_extend(u16 x, u16 bit_count) {
+static u16 get_sign_extend(u16 x, u16 bit_count) {
     if ((x >> (bit_count - 1)) & 1) {
         x |= (u16)(U16_MAX << bit_count);
     }
@@ -95,7 +95,7 @@ static void set_flags(Register r) {
     }
 }
 
-static u16 mem_read(u16 address) {
+static u16 get_mem_at(u16 address) {
     return MEM[address];
 }
 
@@ -131,8 +131,8 @@ static u8 get_r2(u16 instr) {
     return instr & 0x7;
 }
 
-static void set_immediate(u16* instr, i8 value) {
-    *instr = (u16)(*instr | (1 << 5) | (value & 0x1F));
+static void set_immediate(u16* instr, i8 immediate) {
+    *instr = (u16)(*instr | (1 << 5) | (immediate & 0x1F));
 }
 
 static Bool get_immediate_mode(u16 instr) {
@@ -140,7 +140,7 @@ static Bool get_immediate_mode(u16 instr) {
 }
 
 static i8 get_immediate(u16 instr) {
-    return (i8)sign_extend(instr & 0x1F, 5);
+    return (i8)get_sign_extend(instr & 0x1F, 5);
 }
 
 static void set_pc_offset_9(u16* instr, i16 pc_offset) {
@@ -148,7 +148,7 @@ static void set_pc_offset_9(u16* instr, i16 pc_offset) {
 }
 
 static i16 get_pc_offset_9(u16 instr) {
-    return (i16)sign_extend(instr & 0x1FF, 9);
+    return (i16)get_sign_extend(instr & 0x1FF, 9);
 }
 
 static u8 get_neg(u16 instr) {
@@ -163,7 +163,7 @@ static u8 get_pos(u16 instr) {
     return (instr >> 9) & 0x1;
 }
 
-static void do_op_br(u16 instr) {
+static void do_op_branch(u16 instr) {
     // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   0   0 | N | Z | P |             PC_OFFSET             |
@@ -176,7 +176,7 @@ static void do_op_br(u16 instr) {
     }
 }
 
-static u16 get_op_br(Instr instr) {
+static u16 get_op_branch(Instr instr) {
     // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   0   0 |    NZP    |             PC_OFFSET             |
@@ -270,7 +270,7 @@ static void do_op_load(u16 instr) {
     // | 0   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
     u8 r0 = get_r0(instr);
-    REG[r0] = mem_read((u16)(REG[R_PC] + get_pc_offset_9(instr)));
+    REG[r0] = get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)));
     set_flags(r0);
 }
 
@@ -292,7 +292,8 @@ static void do_op_load_indirect(u16 instr) {
     // | 1   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
     u8 r0 = get_r0(instr);
-    REG[r0] = mem_read(mem_read((u16)(REG[R_PC] + get_pc_offset_9(instr))));
+    REG[r0] =
+        get_mem_at(get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr))));
     set_flags(r0);
 }
 
@@ -336,7 +337,7 @@ static u16 get_op_jump(Instr instr) {
 static u16 get_bin_instr(Instr instr) {
     switch (instr.op) {
     case OP_BR: {
-        return get_op_br(instr);
+        return get_op_branch(instr);
     }
     case OP_ADD: {
         return get_op_add(instr);
@@ -361,7 +362,7 @@ static void do_bin_instr(u16 instr) {
     OpCode op = (OpCode)(instr >> 12);
     switch (op) {
     case OP_BR: {
-        do_op_br(instr);
+        do_op_branch(instr);
         break;
     }
     case OP_ADD: {
