@@ -52,14 +52,11 @@ typedef enum {
 } OpCode;
 
 typedef struct {
-    i16 pc_offset;
-    u8  r0_or_nzp;
-    u8  r1;
-    union {
-        u8 r2;
-        i8 imm_value;
-    } opt;
-    Bool   imm_mode;
+    i16    immediate_or_offset;
+    u8     r0_or_nzp;
+    u8     r1;
+    u8     r2;
+    Bool   mode;
     OpCode op;
 } Instr;
 
@@ -134,15 +131,15 @@ static u8 get_r2(u16 instr) {
     return instr & 0x7;
 }
 
-static void set_imm_mode_and_value(u16* instr, i8 value) {
+static void set_immediate(u16* instr, i8 value) {
     *instr = (u16)(*instr | (1 << 5) | (value & 0x1F));
 }
 
-static Bool get_imm_mode(u16 instr) {
+static Bool get_immediate_mode(u16 instr) {
     return (instr >> 5) & 0x1;
 }
 
-static i8 get_imm_value(u16 instr) {
+static i8 get_immediate(u16 instr) {
     return (i8)sign_extend(instr & 0x1F, 5);
 }
 
@@ -187,19 +184,19 @@ static u16 get_op_br(Instr instr) {
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_BR);
     set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
-    set_pc_offset_9(&bin_instr, instr.pc_offset);
+    set_pc_offset_9(&bin_instr, instr.immediate_or_offset);
     return bin_instr;
 }
 
 static void do_op_add(u16 instr) {
     u8 r0 = get_r0(instr);
     u8 r1 = get_r1(instr);
-    if (get_imm_mode(instr)) {
+    if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
         // | 0   0   0   1 |     R0    |     R1    | 1 |     IMMEDIATE     |
         // +---------------+-----------+-----------+---+-------------------+
-        REG[r0] = (u16)(REG[r1] + get_imm_value(instr));
+        REG[r0] = (u16)(REG[r1] + get_immediate(instr));
     } else {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -221,10 +218,10 @@ static u16 get_op_add(Instr instr) {
     set_op(&bin_instr, OP_ADD);
     set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
     set_r1(&bin_instr, instr.r1);
-    if (instr.imm_mode) {
-        set_imm_mode_and_value(&bin_instr, instr.opt.imm_value);
+    if (instr.mode) {
+        set_immediate(&bin_instr, (i8)instr.immediate_or_offset);
     } else {
-        set_r2(&bin_instr, instr.opt.r2);
+        set_r2(&bin_instr, instr.r2);
     }
     return bin_instr;
 }
@@ -232,12 +229,12 @@ static u16 get_op_add(Instr instr) {
 static void do_op_and(u16 instr) {
     u8 r0 = get_r0(instr);
     u8 r1 = get_r1(instr);
-    if (get_imm_mode(instr)) {
+    if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
         // | 0   1   0   1 |     R0    |     R1    | 1 |     IMMEDIATE     |
         // +---------------+-----------+-----------+---+-------------------+
-        REG[r0] = (u16)(REG[r1] & get_imm_value(instr));
+        REG[r0] = (u16)(REG[r1] & get_immediate(instr));
     } else {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -259,10 +256,10 @@ static u16 get_op_and(Instr instr) {
     set_op(&bin_instr, OP_AND);
     set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
     set_r1(&bin_instr, instr.r1);
-    if (instr.imm_mode) {
-        set_imm_mode_and_value(&bin_instr, instr.opt.imm_value);
+    if (instr.mode) {
+        set_immediate(&bin_instr, (i8)instr.immediate_or_offset);
     } else {
-        set_r2(&bin_instr, instr.opt.r2);
+        set_r2(&bin_instr, instr.r2);
     }
     return bin_instr;
 }
@@ -285,7 +282,7 @@ static u16 get_op_load(Instr instr) {
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_LD);
     set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
-    set_pc_offset_9(&bin_instr, instr.pc_offset);
+    set_pc_offset_9(&bin_instr, instr.immediate_or_offset);
     return bin_instr;
 }
 
@@ -307,7 +304,7 @@ static u16 get_op_load_indirect(Instr instr) {
     u16 bin_instr = 0;
     set_op(&bin_instr, OP_LDI);
     set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
-    set_pc_offset_9(&bin_instr, instr.pc_offset);
+    set_pc_offset_9(&bin_instr, instr.immediate_or_offset);
     return bin_instr;
 }
 

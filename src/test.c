@@ -25,14 +25,14 @@ static void test_op_br_neg(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_NEG;
-    instr.pc_offset = -10;
+    instr.immediate_or_offset = -10;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 1001 1111 0110")) {
         FAIL("test_op_br_neg (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_neg(bin_instr)) ||
-        (instr.pc_offset != get_pc_offset_9(bin_instr)))
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_br_neg");
     }
@@ -43,14 +43,14 @@ static void test_op_br_zero(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_ZERO;
-    instr.pc_offset = -51;
+    instr.immediate_or_offset = -51;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 0101 1100 1101")) {
         FAIL("test_op_br_zero (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_zero(bin_instr)) ||
-        (instr.pc_offset != get_pc_offset_9(bin_instr)))
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_br_zero");
     }
@@ -61,14 +61,14 @@ static void test_op_br_pos(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
     instr.r0_or_nzp = FL_POS;
-    instr.pc_offset = -27;
+    instr.immediate_or_offset = -27;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0000 0011 1110 0101")) {
         FAIL("test_op_br_pos (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) || (!get_pos(bin_instr)) ||
-        (instr.pc_offset != get_pc_offset_9(bin_instr)))
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_br_pos");
     }
@@ -80,8 +80,8 @@ static void test_op_add(char* buffer) {
     instr.op = OP_ADD;
     instr.r0_or_nzp = 3;
     instr.r1 = 5;
-    instr.imm_mode = FALSE;
-    instr.opt.r2 = 7;
+    instr.mode = FALSE;
+    instr.r2 = 7;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0001 0111 0100 0111")) {
@@ -90,33 +90,33 @@ static void test_op_add(char* buffer) {
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
-        (instr.imm_mode != get_imm_mode(bin_instr)) ||
-        (instr.opt.r2 != get_r2(bin_instr)))
+        (instr.mode != get_immediate_mode(bin_instr)) ||
+        (instr.r2 != get_r2(bin_instr)))
     {
         FAIL("test_op_add");
     }
     printf(".");
 }
 
-static void test_op_add_imm_mode(char* buffer) {
+static void test_op_add_immediate_mode(char* buffer) {
     Instr instr = {0};
     instr.op = OP_ADD;
     instr.r0_or_nzp = 5;
     instr.r1 = 3;
-    instr.imm_mode = TRUE;
-    instr.opt.imm_value = -9;
+    instr.mode = TRUE;
+    instr.immediate_or_offset = -9;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0001 1010 1111 0111")) {
-        FAIL("test_op_add_imm_mode (strcmp)");
+        FAIL("test_op_add_immediate_mode (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
-        (instr.imm_mode != get_imm_mode(bin_instr)) ||
-        (instr.opt.imm_value != get_imm_value(bin_instr)))
+        (instr.mode != get_immediate_mode(bin_instr)) ||
+        (instr.immediate_or_offset != get_immediate(bin_instr)))
     {
-        FAIL("test_op_add_imm_mode");
+        FAIL("test_op_add_immediate_mode");
     }
     printf(".");
 }
@@ -126,8 +126,8 @@ static void test_op_and(char* buffer) {
     instr.op = OP_AND;
     instr.r0_or_nzp = 2;
     instr.r1 = 1;
-    instr.imm_mode = FALSE;
-    instr.opt.r2 = 4;
+    instr.mode = FALSE;
+    instr.r2 = 4;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0101 0100 0100 0100")) {
@@ -136,33 +136,33 @@ static void test_op_and(char* buffer) {
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
-        (instr.imm_mode != get_imm_mode(bin_instr)) ||
-        (instr.opt.r2 != get_r2(bin_instr)))
+        (instr.mode != get_immediate_mode(bin_instr)) ||
+        (instr.r2 != get_r2(bin_instr)))
     {
         FAIL("test_op_and");
     }
     printf(".");
 }
 
-static void test_op_and_imm_mode(char* buffer) {
+static void test_op_and_immediate_mode(char* buffer) {
     Instr instr = {0};
     instr.op = OP_AND;
     instr.r0_or_nzp = 2;
     instr.r1 = 3;
-    instr.imm_mode = TRUE;
-    instr.opt.imm_value = 14;
+    instr.mode = TRUE;
+    instr.immediate_or_offset = 14;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0101 0100 1110 1110")) {
-        FAIL("test_op_and_imm_mode (strcmp)");
+        FAIL("test_op_and_immediate_mode (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
-        (instr.imm_mode != get_imm_mode(bin_instr)) ||
-        (instr.opt.imm_value != get_imm_value(bin_instr)))
+        (instr.mode != get_immediate_mode(bin_instr)) ||
+        (instr.immediate_or_offset != get_immediate(bin_instr)))
     {
-        FAIL("test_op_and_imm_mode");
+        FAIL("test_op_and_immediate_mode");
     }
     printf(".");
 }
@@ -171,7 +171,7 @@ static void test_op_load(char* buffer) {
     Instr instr = {0};
     instr.op = OP_LD;
     instr.r0_or_nzp = 2;
-    instr.pc_offset = 66;
+    instr.immediate_or_offset = 66;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "0010 0100 0100 0010")) {
@@ -179,7 +179,7 @@ static void test_op_load(char* buffer) {
     }
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
-        (instr.pc_offset != get_pc_offset_9(bin_instr)))
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_load");
     }
@@ -190,7 +190,7 @@ static void test_op_load_indirect(char* buffer) {
     Instr instr = {0};
     instr.op = OP_LDI;
     instr.r0_or_nzp = 6;
-    instr.pc_offset = 100;
+    instr.immediate_or_offset = 100;
     u16 bin_instr = get_bin_instr(instr);
     set_u16_to_string(buffer, bin_instr);
     if (strcmp(buffer, "1010 1100 0110 0100")) {
@@ -198,7 +198,7 @@ static void test_op_load_indirect(char* buffer) {
     }
     if ((instr.op != get_op(bin_instr)) ||
         (instr.r0_or_nzp != get_r0(bin_instr)) ||
-        (instr.pc_offset != get_pc_offset_9(bin_instr)))
+        (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_load_indirect");
     }
@@ -229,9 +229,9 @@ int main(void) {
     test_op_br_zero(buffer);
     test_op_br_pos(buffer);
     test_op_add(buffer);
-    test_op_add_imm_mode(buffer);
+    test_op_add_immediate_mode(buffer);
     test_op_and(buffer);
-    test_op_and_imm_mode(buffer);
+    test_op_and_immediate_mode(buffer);
     test_op_load(buffer);
     test_op_load_indirect(buffer);
     test_op_jump(buffer);
