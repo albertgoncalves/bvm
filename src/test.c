@@ -9,8 +9,9 @@
     }
 
 static void set_u16_to_string(char* buffer, u16 x) {
+    u8 i = 15;
     u8 j = 0;
-    for (u8 i = 15;; --i) {
+    for (;; --i) {
         if (!((j + 1) % 5)) {
             buffer[j++] = ' ';
         }
