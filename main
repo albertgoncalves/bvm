@@ -2,10 +2,6 @@
 
 set -euo pipefail
 
-now () {
-    date +%s.%N
-}
-
 export FLAGS=(
     "-fshort-enums"
     "-fsingle-precision-constant"
@@ -47,25 +43,24 @@ export FLAGS=(
     "-Wwrite-strings"
 )
 
-build_all () {
+now () {
+    date +%s.%N
+}
+
+cppcheck \
+    --enable=all \
+    --suppress=missingIncludeSystem \
+    "$WD/src" \
+    | sed 's/\/.*\/\(.*\) \.\.\./\1/g'
+clang-format -i -verbose "$WD/src"/* 2>&1 | sed 's/\/.*\///g'
+(
+    start=$(now)
     cp "$WD/src"/* "$WD/build"
     cd "$WD/build"
     gcc -g -o "$WD/bin/test" "${FLAGS[@]}" "$WD/src/test.c"
     gcc -g -o "$WD/bin/main" "${FLAGS[@]}" "$WD/src/main.c"
-}
-
-(
-    start=$(now)
-    clang-format -i -verbose "$WD/src"/* 2>&1 | sed 's/\/.*\///g'
-    cppcheck \
-        --enable=all \
-        --suppress=missingIncludeSystem \
-        "$WD/src" \
-        | sed 's/\/.*\/\(.*\) \.\.\./\1/g'
-    build_all
     end=$(now)
     python3 -c "print(\"Compiled! ({:.3f}s)\n\".format(${end} - ${start}))"
 )
-
 "$WD/bin/test"
 "$WD/bin/main"
