@@ -339,6 +339,26 @@ static void test_op_store_register(char* buffer) {
     printf(".");
 }
 
+static void test_op_not(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_NOT;
+    instr.r0_or_nzp = 5;
+    instr.r1 = 4;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "1001 1011 0011 1111")) {
+        FAIL("test_op_not (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r1 != get_r1(bin_instr)) ||
+        (-1 != get_reg_offset_6(bin_instr)))
+    {
+        FAIL("test_op_not");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -360,6 +380,7 @@ int main(void) {
     test_op_load_register(buffer);
     test_op_store_indirect(buffer);
     test_op_store_register(buffer);
+    test_op_not(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;

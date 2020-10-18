@@ -41,14 +41,14 @@ typedef enum {
     OP_AND,    // bitwise and
     OP_LDR,    // load register
     OP_STR,    // store register
-    // OP_RTI,   // unused
-    // OP_NOT,   // bitwise not
-    OP_LDI = 10, // load indirect
-    OP_STI,      // store indirect
-    OP_JMP,      // jump
-    // OP_RES,   // reserved (unused)
-    // OP_LEA,   // load effective address
-    // OP_TRAP,  // execute trap
+    // OP_RTI,  // return from interrupt (unused)
+    OP_NOT = 9, // bitwise not
+    OP_LDI,     // load indirect
+    OP_STI,     // store indirect
+    OP_JMP,     // jump
+    // OP_RES,  // reserved (unused)
+    // OP_LEA,  // load effective address
+    // OP_TRAP, // execute trap
 } OpCode;
 
 typedef struct {
@@ -468,6 +468,30 @@ static u16 get_op_store_register(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_not(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   0   1 |     R0    |     R1    |          NULL         |
+    // +---------------+-----------+-----------+-----------------------+
+    u8 r0 = get_r0(instr);
+    u8 r1 = get_r1(instr);
+    REG[r0] = !REG[r1];
+    set_flags(r0);
+}
+
+static u16 get_op_not(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   0   1 |     R0    |     R1    | 1 | 1 | 1 | 1 | 1 | 1 |
+    // +---------------+-----------+-----------+---+---+---+---+---+---+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_NOT);
+    set_r0_or_nzp(&bin_instr, instr.r0_or_nzp);
+    set_r1(&bin_instr, instr.r1);
+    set_reg_offset_6(&bin_instr, -1);
+    return bin_instr;
+}
+
 #define NOT_IMPLEMENTED(op)                                  \
     {                                                        \
         fprintf(stderr, "OpCode:%d not implemented!\n", op); \
@@ -499,6 +523,9 @@ static u16 get_bin_instr(Instr instr) {
     }
     case OP_STR: {
         return get_op_store_register(instr);
+    }
+    case OP_NOT: {
+        return get_op_not(instr);
     }
     case OP_LDI: {
         return get_op_load_indirect(instr);
@@ -546,6 +573,10 @@ static void do_bin_instr(u16 instr) {
     }
     case OP_STR: {
         do_op_store_register(instr);
+        break;
+    }
+    case OP_NOT: {
+        do_op_not(instr);
         break;
     }
     case OP_LDI: {
