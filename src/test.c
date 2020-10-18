@@ -205,6 +205,21 @@ static void test_op_load_indirect(char* buffer) {
     printf(".");
 }
 
+static void test_op_jump(char* buffer) {
+    Instr instr = {0};
+    instr.op = OP_JMP;
+    instr.r1 = 5;
+    u16 bin_instr = get_bin_instr(instr);
+    set_u16_to_string(buffer, bin_instr);
+    if (strcmp(buffer, "1100 0001 0100 0000")) {
+        FAIL("test_op_jump (strcmp)");
+    }
+    if ((instr.op != get_op(bin_instr)) || (instr.r1 != get_r1(bin_instr))) {
+        FAIL("test_op_jump");
+    }
+    printf(".");
+}
+
 int main(void) {
     char* buffer = calloc(20, sizeof(char));
     if (buffer == NULL) {
@@ -219,6 +234,7 @@ int main(void) {
     test_op_and_imm_mode(buffer);
     test_op_load(buffer);
     test_op_load_indirect(buffer);
+    test_op_jump(buffer);
     free(buffer);
     printf("\nDone!\n");
     return EXIT_SUCCESS;

@@ -45,7 +45,7 @@ typedef enum {
     // OP_NOT,   // bitwise not
     OP_LDI = 10, // load indirect
     // OP_STI,   // store indirect
-    // OP_JMP,   // jump
+    OP_JMP = 12, // jump
     // OP_RES,   // reserved (unused)
     // OP_LEA,   // load effective address
     // OP_TRAP,  // execute trap
@@ -119,7 +119,7 @@ static u8 get_r0(u16 instr) {
 }
 
 static void set_r1(u16* instr, u8 r1) {
-    *instr = (u16)(*instr | (u16)((r1 & 0x7) << 6));
+    *instr = (u16)(*instr | ((r1 & 0x7) << 6));
 }
 
 static u8 get_r1(u16 instr) {
@@ -127,7 +127,7 @@ static u8 get_r1(u16 instr) {
 }
 
 static void set_r2(u16* instr, u8 r2) {
-    *instr = (u16)(*instr | (u16)(r2 & 0x7));
+    *instr = (u16)(*instr | (r2 & 0x7));
 }
 
 static u8 get_r2(u16 instr) {
@@ -311,6 +311,25 @@ static u16 get_op_load_indirect(Instr instr) {
     return bin_instr;
 }
 
+static void do_op_jump(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   0   0 |    NULL   |     R1    |          NULL         |
+    // +---------------+-----------+-----------------------------------+
+    REG[R_PC] = REG[get_r1(instr)];
+}
+
+static u16 get_op_jump(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   0   0 |    NULL   |     R1    |          NULL         |
+    // +---------------+-----------+-----------------------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_JMP);
+    set_r1(&bin_instr, instr.r1);
+    return bin_instr;
+}
+
 #define NOT_IMPLEMENTED(op)                                  \
     {                                                        \
         fprintf(stderr, "OpCode:%d not implemented!\n", op); \
@@ -333,6 +352,9 @@ static u16 get_bin_instr(Instr instr) {
     }
     case OP_LDI: {
         return get_op_load_indirect(instr);
+    }
+    case OP_JMP: {
+        return get_op_jump(instr);
     }
     }
     exit(EXIT_FAILURE);
@@ -359,6 +381,10 @@ static void do_bin_instr(u16 instr) {
     }
     case OP_LDI: {
         do_op_load_indirect(instr);
+        break;
+    }
+    case OP_JMP: {
+        do_op_jump(instr);
         break;
     }
     }
