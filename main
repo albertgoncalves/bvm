@@ -26,7 +26,6 @@ export FLAGS=(
     "-Wlogical-op"
     "-Wmissing-declarations"
     "-Wmissing-include-dirs"
-    "-Wno-unused-function"
     "-Wno-unused-parameter"
     "-Wno-unused-variable"
     "-Wnull-dereference"
