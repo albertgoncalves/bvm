@@ -111,7 +111,7 @@ static void set_r0_or_nzp(u16* instr, u8 r0_or_nzp) {
     *instr = (u16)(*instr | ((r0_or_nzp & 0x7) << 9));
 }
 
-static u8 get_r0(u16 instr) {
+static u8 get_r0_or_nzp(u16 instr) {
     return (instr >> 9) & 0x7;
 }
 
@@ -163,18 +163,6 @@ static i16 get_pc_offset_11(u16 instr) {
     return (i16)get_sign_extend(instr & 0x7FF, 11);
 }
 
-static u8 get_neg(u16 instr) {
-    return (instr >> 11) & 0x1;
-}
-
-static u8 get_zero(u16 instr) {
-    return (instr >> 10) & 0x1;
-}
-
-static u8 get_pos(u16 instr) {
-    return (instr >> 9) & 0x1;
-}
-
 static void set_reg_offset_6(u16* instr, i16 pc_offset) {
     *instr = (u16)(*instr | (pc_offset & 0x3F));
 }
@@ -183,15 +171,20 @@ static i16 get_reg_offset_6(u16 instr) {
     return (i16)get_sign_extend(instr & 0x3F, 6);
 }
 
+static void set_trap(u16* instr, Trap trap) {
+    *instr = (u16)(*instr | (trap & 0xFF));
+}
+
+static Trap get_trap(u16 instr) {
+    return (Trap)(instr & 0xFF);
+}
+
 static void do_op_branch(u16 instr) {
     // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   0   0 | N | Z | P |             PC_OFFSET             |
     // +---------------+---+---+---+-----------------------------------+
-    u16 r_cond = REG[R_COND];
-    if ((get_neg(instr) & r_cond) || (get_zero(instr) & r_cond) ||
-        (get_pos(instr) & r_cond))
-    {
+    if (REG[R_COND] & get_r0_or_nzp(instr)) {
         REG[R_PC] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
     }
 }
@@ -209,7 +202,7 @@ static u16 get_op_branch(Instr instr) {
 }
 
 static void do_op_add(u16 instr) {
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     u8 r1 = get_r1(instr);
     if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
@@ -247,7 +240,7 @@ static u16 get_op_add(Instr instr) {
 }
 
 static void do_op_and(u16 instr) {
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     u8 r1 = get_r1(instr);
     if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
@@ -324,7 +317,7 @@ static void do_op_load(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)));
     set_flags(r0);
 }
@@ -346,7 +339,7 @@ static void do_op_load_indirect(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     REG[r0] =
         get_mem_at(get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr))));
     set_flags(r0);
@@ -388,7 +381,7 @@ static void do_op_store(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   1   1 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    MEM[REG[R_PC] + get_pc_offset_9(instr)] = get_r0(instr);
+    MEM[REG[R_PC] + get_pc_offset_9(instr)] = REG[get_r0_or_nzp(instr)];
 }
 
 static u16 get_op_store(Instr instr) {
@@ -408,7 +401,7 @@ static void do_op_load_register(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   1   1   0 |     R0    |     R1    |         OFFSET        |
     // +---------------+-----------+-----------+-----------------------+
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = get_mem_at((u16)(REG[get_r1(instr)] + get_reg_offset_6(instr)));
     set_flags(r0);
 }
@@ -432,7 +425,7 @@ static void do_op_store_indirect(u16 instr) {
     // | 1   0   1   1 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
     MEM[get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)))] =
-        REG[get_r0(instr)];
+        REG[get_r0_or_nzp(instr)];
 }
 
 static u16 get_op_store_indirect(Instr instr) {
@@ -452,7 +445,8 @@ static void do_op_store_register(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   1   1   1 |     R0    |     R1    |         OFFSET        |
     // +---------------+-----------+-----------+-----------------------+
-    MEM[REG[get_r1(instr)] + get_reg_offset_6(instr)] = REG[get_r0(instr)];
+    MEM[REG[get_r1(instr)] + get_reg_offset_6(instr)] =
+        REG[get_r0_or_nzp(instr)];
 }
 
 static u16 get_op_store_register(Instr instr) {
@@ -473,9 +467,8 @@ static void do_op_not(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   0   0   1 |     R0    |     R1    |          NULL         |
     // +---------------+-----------+-----------+-----------------------+
-    u8 r0 = get_r0(instr);
-    u8 r1 = get_r1(instr);
-    REG[r0] = !REG[r1];
+    u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] = (u16)(~REG[get_r1(instr)]);
     set_flags(r0);
 }
 
@@ -497,7 +490,7 @@ static void do_op_load_effective_address(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   1   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0(instr);
+    u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
     set_flags(r0);
 }

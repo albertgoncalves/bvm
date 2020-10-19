@@ -22,6 +22,10 @@ static void set_u16_to_string(char* buffer, u16 x) {
     }
 }
 
+static u8 get_neg(u16 instr) {
+    return (instr >> 11) & 0x1;
+}
+
 static void test_op_branch_neg(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
@@ -40,6 +44,10 @@ static void test_op_branch_neg(char* buffer) {
     printf(".");
 }
 
+static u8 get_zero(u16 instr) {
+    return (instr >> 10) & 0x1;
+}
+
 static void test_op_branch_zero(char* buffer) {
     Instr instr = {0};
     instr.op = OP_BR;
@@ -56,6 +64,10 @@ static void test_op_branch_zero(char* buffer) {
         FAIL("test_op_branch_zero");
     }
     printf(".");
+}
+
+static u8 get_pos(u16 instr) {
+    return (instr >> 9) & 0x1;
 }
 
 static void test_op_branch_pos(char* buffer) {
@@ -89,7 +101,7 @@ static void test_op_add(char* buffer) {
         FAIL("test_op_add (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.mode != get_immediate_mode(bin_instr)) ||
         (instr.r2 != get_r2(bin_instr)))
@@ -112,7 +124,7 @@ static void test_op_add_immediate_mode(char* buffer) {
         FAIL("test_op_add_immediate_mode (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.mode != get_immediate_mode(bin_instr)) ||
         (instr.immediate_or_offset != get_immediate(bin_instr)))
@@ -135,7 +147,7 @@ static void test_op_and(char* buffer) {
         FAIL("test_op_and (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.mode != get_immediate_mode(bin_instr)) ||
         (instr.r2 != get_r2(bin_instr)))
@@ -158,7 +170,7 @@ static void test_op_and_immediate_mode(char* buffer) {
         FAIL("test_op_and_immediate_mode (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.mode != get_immediate_mode(bin_instr)) ||
         (instr.immediate_or_offset != get_immediate(bin_instr)))
@@ -179,7 +191,7 @@ static void test_op_load(char* buffer) {
         FAIL("test_op_load (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_load");
@@ -198,7 +210,7 @@ static void test_op_load_indirect(char* buffer) {
         FAIL("test_op_load_indirect (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_load_indirect");
@@ -270,7 +282,7 @@ static void test_op_store(char* buffer) {
         FAIL("test_op_store (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_store");
@@ -290,7 +302,7 @@ static void test_op_load_register(char* buffer) {
         FAIL("test_op_load_register (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.immediate_or_offset != get_reg_offset_6(bin_instr)))
     {
@@ -310,7 +322,7 @@ static void test_op_store_indirect(char* buffer) {
         FAIL("test_op_store_indirect (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_store_indirect");
@@ -330,7 +342,7 @@ static void test_op_store_register(char* buffer) {
         FAIL("test_op_store_register (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) ||
         (instr.immediate_or_offset != get_reg_offset_6(bin_instr)))
     {
@@ -350,7 +362,7 @@ static void test_op_not(char* buffer) {
         FAIL("test_op_not (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.r1 != get_r1(bin_instr)) || (-1 != get_reg_offset_6(bin_instr)))
     {
         FAIL("test_op_not");
@@ -369,7 +381,7 @@ static void test_op_load_effective_address(char* buffer) {
         FAIL("test_op_load_effective_address (strcmp)");
     }
     if ((instr.op != get_op(bin_instr)) ||
-        (instr.r0_or_nzp != get_r0(bin_instr)) ||
+        (instr.r0_or_nzp != get_r0_or_nzp(bin_instr)) ||
         (instr.immediate_or_offset != get_pc_offset_9(bin_instr)))
     {
         FAIL("test_op_load_effective_address");
