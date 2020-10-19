@@ -1,17 +1,24 @@
 #ifndef __VM_H__
 #define __VM_H__
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+typedef fd_set         FdSet;
+typedef struct timeval TimeVal;
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
+typedef size_t   usize;
 
 #define U16_MAX 0xFFFF
 
 typedef int8_t  i8;
 typedef int16_t i16;
+typedef int32_t i32;
 
 typedef enum {
     FALSE = 0,
@@ -48,14 +55,29 @@ typedef enum {
     OP_JMP,     // jump
     // OP_RES,   // reserved (unused)
     OP_LEA = 14, // load effective address
-    // OP_TRAP,  // execute trap
+    OP_TRAP,     // execute trap
 } OpCode;
+
+typedef enum {
+    TRAP_GETC = 0x20,  // get char from keyboard, not echoed onto the terminal
+    TRAP_OUT = 0x21,   // output a character
+    TRAP_PUTS = 0x22,  // output a word string
+    TRAP_IN = 0x23,    // get char from keyboard, echoed onto the terminal
+    TRAP_PUTSP = 0x24, // output a byte string
+    TRAP_HALT = 0x25,  // halt the program
+} Trap;
+
+typedef enum {
+    KEYBOARD_STATUS = 0xFE00,
+    KEYBOARD_DATA = 0xFE02,
+} MemoryMap;
 
 typedef struct {
     i16    immediate_or_offset;
     u8     r0_or_nzp;
     u8     r1;
     u8     r2;
+    Trap   trap;
     Bool   mode;
     OpCode op;
 } Instr;
@@ -95,7 +117,25 @@ static void set_flags(Register r) {
     }
 }
 
+static Bool poll_keyboard(void) {
+    FdSet file_descriptors;
+    FD_ZERO(&file_descriptors);
+    FD_SET(STDIN_FILENO, &file_descriptors);
+    TimeVal timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    return select(1, &file_descriptors, NULL, NULL, &timeout) != 0;
+}
+
 static u16 get_mem_at(u16 address) {
+    if (address == KEYBOARD_STATUS) {
+        if (poll_keyboard()) {
+            MEM[KEYBOARD_STATUS] = (1 << 15);
+            MEM[KEYBOARD_DATA] = (u16)getchar();
+        } else {
+            MEM[KEYBOARD_STATUS] = 0;
+        }
+    }
     return MEM[address];
 }
 
@@ -507,60 +547,69 @@ static u16 get_op_load_effective_address(Instr instr) {
     return bin_instr;
 }
 
-#define NOT_IMPLEMENTED(op)                                  \
-    {                                                        \
-        fprintf(stderr, "OpCode:%d not implemented!\n", op); \
-        exit(EXIT_FAILURE);                                  \
+static void do_op_trap(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   1   0 | 0 | 0 | 0 | 0 |              TRAP             |
+    // +---------------+---+---+---+---+-------------------------------+
+    switch (get_trap(instr)) {
+    case TRAP_GETC: {
+        REG[R_0] = (u16)getchar();
+        break;
     }
+    case TRAP_OUT: {
+        putc((char)REG[R_0], stdout);
+        fflush(stdout);
+        break;
+    }
+    case TRAP_PUTS: {
+        for (u16* x = MEM + REG[R_0]; *x; ++x) {
+            putc((char)*x, stdout);
+        }
+        fflush(stdout);
+        break;
+    }
+    case TRAP_IN: {
+        printf("Enter a character: ");
+        char x = (char)getchar();
+        putc(x, stdout);
+        REG[R_0] = (u16)x;
+        break;
+    }
+    case TRAP_PUTSP: {
+        for (u16* x = MEM + REG[R_0]; *x; ++x) {
+            char a = (char)((*x) & 0xFF);
+            putc(a, stdout);
+            char b = (char)((*x) >> 8);
+            if (b) {
+                putc(b, stdout);
+            }
+        }
+        fflush(stdout);
+        break;
+    }
+    case TRAP_HALT: {
+        puts("HALT");
+        fflush(stdout);
+        STATUS = DEAD;
+        break;
+    }
+    }
+}
 
-static u16 get_bin_instr(Instr instr) {
-    switch (instr.op) {
-    case OP_BR: {
-        return get_op_branch(instr);
-    }
-    case OP_ADD: {
-        return get_op_add(instr);
-    }
-    case OP_LD: {
-        return get_op_load(instr);
-    }
-    case OP_ST: {
-        return get_op_store(instr);
-    }
-    case OP_JSR: {
-        return get_op_jump_subroutine(instr);
-    }
-    case OP_AND: {
-        return get_op_and(instr);
-    }
-    case OP_LDR: {
-        return get_op_load_register(instr);
-    }
-    case OP_STR: {
-        return get_op_store_register(instr);
-    }
-    case OP_NOT: {
-        return get_op_not(instr);
-    }
-    case OP_LDI: {
-        return get_op_load_indirect(instr);
-    }
-    case OP_STI: {
-        return get_op_store_indirect(instr);
-    }
-    case OP_JMP: {
-        return get_op_jump(instr);
-    }
-    case OP_LEA: {
-        return get_op_load_effective_address(instr);
-    }
-    }
-    exit(EXIT_FAILURE);
+static u16 get_op_trap(Instr instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   1   0 | 0 | 0 | 0 | 0 |              TRAP             |
+    // +---------------+---+---+---+---+-------------------------------+
+    u16 bin_instr = 0;
+    set_op(&bin_instr, OP_TRAP);
+    set_trap(&bin_instr, instr.trap);
+    return bin_instr;
 }
 
 static void do_bin_instr(u16 instr) {
-    OpCode op = (OpCode)(instr >> 12);
-    switch (op) {
+    switch (get_op(instr)) {
     case OP_BR: {
         do_op_branch(instr);
         break;
@@ -613,7 +662,59 @@ static void do_bin_instr(u16 instr) {
         do_op_load_effective_address(instr);
         break;
     }
+    case OP_TRAP: {
+        do_op_trap(instr);
+        break;
     }
+    }
+}
+
+static u16 get_bin_instr(Instr instr) {
+    switch (instr.op) {
+    case OP_BR: {
+        return get_op_branch(instr);
+    }
+    case OP_ADD: {
+        return get_op_add(instr);
+    }
+    case OP_LD: {
+        return get_op_load(instr);
+    }
+    case OP_ST: {
+        return get_op_store(instr);
+    }
+    case OP_JSR: {
+        return get_op_jump_subroutine(instr);
+    }
+    case OP_AND: {
+        return get_op_and(instr);
+    }
+    case OP_LDR: {
+        return get_op_load_register(instr);
+    }
+    case OP_STR: {
+        return get_op_store_register(instr);
+    }
+    case OP_NOT: {
+        return get_op_not(instr);
+    }
+    case OP_LDI: {
+        return get_op_load_indirect(instr);
+    }
+    case OP_STI: {
+        return get_op_store_indirect(instr);
+    }
+    case OP_JMP: {
+        return get_op_jump(instr);
+    }
+    case OP_LEA: {
+        return get_op_load_effective_address(instr);
+    }
+    case OP_TRAP: {
+        return get_op_trap(instr);
+    }
+    }
+    exit(EXIT_FAILURE);
 }
 
 #endif

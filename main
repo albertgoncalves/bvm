@@ -27,6 +27,7 @@ export FLAGS=(
     "-Wmissing-declarations"
     "-Wmissing-include-dirs"
     "-Wno-unused-function"
+    "-Wno-unused-parameter"
     "-Wno-unused-variable"
     "-Wnull-dereference"
     "-Wpacked"
@@ -63,4 +64,4 @@ clang-format -i -verbose "$WD/src"/* 2>&1 | sed 's/\/.*\///g'
     python3 -c "print(\"Compiled! ({:.3f}s)\n\".format(${end} - ${start}))"
 )
 "$WD/bin/test"
-"$WD/bin/main"
+"$WD/bin/main" "$WD/bytecode/2048.obj"
