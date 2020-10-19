@@ -46,6 +46,7 @@ static void set_bytecode(File* file) {
         ++index;
     }
 }
+
 int main(int n, const char* args[]) {
     {
         if (n < 2) {
