@@ -53,8 +53,8 @@ static void do_op_branch(u16 instr) {
 }
 
 static void do_op_add(u16 instr) {
-    u8 r0 = get_r0_or_nzp(instr);
-    u8 r1 = get_r1(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
+    const u8 r1 = get_r1(instr);
     if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -76,7 +76,7 @@ static void do_op_load(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0_or_nzp(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)));
     set_flags(r0);
 }
@@ -107,8 +107,8 @@ static void do_op_jump_subroutine(u16 instr) {
 }
 
 static void do_op_and(u16 instr) {
-    u8 r0 = get_r0_or_nzp(instr);
-    u8 r1 = get_r1(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
+    const u8 r1 = get_r1(instr);
     if (get_immediate_mode(instr)) {
         // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
         // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -130,7 +130,7 @@ static void do_op_load_register(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 0   1   1   0 |     R0    |     R1    |         OFFSET        |
     // +---------------+-----------+-----------+-----------------------+
-    u8 r0 = get_r0_or_nzp(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = get_mem_at((u16)(REG[get_r1(instr)] + get_reg_offset_6(instr)));
     set_flags(r0);
 }
@@ -149,7 +149,7 @@ static void do_op_not(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   0   0   1 |     R0    |     R1    |          NULL         |
     // +---------------+-----------+-----------+-----------------------+
-    u8 r0 = get_r0_or_nzp(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = (u16)(~REG[get_r1(instr)]);
     set_flags(r0);
 }
@@ -159,7 +159,7 @@ static void do_op_load_indirect(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   0   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0_or_nzp(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
     REG[r0] =
         get_mem_at(get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr))));
     set_flags(r0);
@@ -187,7 +187,7 @@ static void do_op_load_effective_address(u16 instr) {
     // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
     // | 1   1   1   0 |     R0    |             PC_OFFSET             |
     // +---------------+-----------+-----------------------------------+
-    u8 r0 = get_r0_or_nzp(instr);
+    const u8 r0 = get_r0_or_nzp(instr);
     REG[r0] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
     set_flags(r0);
 }
@@ -216,16 +216,16 @@ static void do_op_trap(u16 instr) {
     }
     case TRAP_IN: {
         printf("Enter a character: ");
-        char x = (char)getchar();
+        const char x = (char)getchar();
         putc(x, stdout);
         REG[R_0] = (u16)x;
         break;
     }
     case TRAP_PUTSP: {
         for (u16* x = MEM + REG[R_0]; *x; ++x) {
-            char a = (char)((*x) & 0xFF);
+            const char a = (char)((*x) & 0xFF);
             putc(a, stdout);
-            char b = (char)((*x) >> 8);
+            const char b = (char)((*x) >> 8);
             if (b) {
                 putc(b, stdout);
             }
