@@ -320,23 +320,20 @@ static void handle_interrupt(i32 _) {
     exit(EXIT_FAILURE);
 }
 
-static u16 swap_endian_16(u16 x) {
-    return (u16)((x << 8) | (x >> 8));
-}
-
 static void set_bytecode(File* file) {
     u16 origin;
     if (fread(&origin, sizeof(u16), 1, file) == 0) {
         exit(EXIT_FAILURE);
     }
-    origin = swap_endian_16(origin);
+    /* NOTE: See `https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html`. */
+    origin = __builtin_bswap16(origin);
     u16*  index = MEM + origin;
     usize bytes = fread(index, sizeof(u16), (usize)(U16_MAX - origin), file);
     if (bytes == 0) {
         exit(EXIT_FAILURE);
     }
     while (0 < bytes--) {
-        *index = swap_endian_16(*index);
+        *index = __builtin_bswap16(*index);
         ++index;
     }
 }
