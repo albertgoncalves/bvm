@@ -338,7 +338,7 @@ static void set_bytecode(File* file) {
     }
 }
 
-int main(int n, const char* args[]) {
+i32 main(i32 n, const char** args) {
     {
         if (n < 2) {
             exit(EXIT_FAILURE);
