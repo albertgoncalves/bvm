@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "vm.h"
+#include "pre_vm.h"
 
 typedef struct {
     i16    immediate_or_offset;

@@ -57,10 +57,10 @@ clang-format -i -verbose "$WD/src"/* 2>&1 | sed 's/\/.*\///g'
     start=$(now)
     cp "$WD/src"/* "$WD/build"
     cd "$WD/build"
-    gcc -g -o "$WD/bin/test" "${FLAGS[@]}" "$WD/src/test.c"
+    gcc -g -o "$WD/bin/pre_vm_test" "${FLAGS[@]}" "$WD/src/pre_vm_test.c"
     gcc -g -o "$WD/bin/main" "${FLAGS[@]}" "$WD/src/main.c"
     end=$(now)
     python3 -c "print(\"Compiled! ({:.3f}s)\n\".format(${end} - ${start}))"
 )
-"$WD/bin/test"
+"$WD/bin/pre_vm_test"
 "$WD/bin/main" "$WD/bytecode/2048.obj"

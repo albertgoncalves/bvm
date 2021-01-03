@@ -1,142 +1,344 @@
 #ifndef __VM_H__
 #define __VM_H__
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include "pre_vm.h"
 
-typedef fd_set         FdSet;
-typedef struct timeval TimeVal;
+#include <signal.h>
+#include <termios.h>
 
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef size_t   usize;
+typedef FILE           File;
+typedef struct termios TermIos;
+typedef tcflag_t       TcFlag;
 
-#define U16_MAX 0xFFFF
+static TermIos TERMINAL;
 
-typedef int8_t  i8;
-typedef int16_t i16;
-typedef int32_t i32;
-
-typedef enum {
-    FALSE = 0,
-    TRUE,
-} Bool;
-
-typedef enum {
-    R_0 = 0,
-    R_1,
-    R_2,
-    R_3,
-    R_4,
-    R_5,
-    R_6,
-    R_7,
-    R_PC,
-    R_COND,
-    R_SIZE,
-} Register;
-
-typedef enum {
-    OP_BR = 0, // branch
-    OP_ADD,    // add
-    OP_LD,     // load
-    OP_ST,     // store
-    OP_JSR,    // jump register
-    OP_AND,    // bitwise and
-    OP_LDR,    // load register
-    OP_STR,    // store register
-    // OP_RTI,  // return from interrupt (unused)
-    OP_NOT = 9, // bitwise not
-    OP_LDI,     // load indirect
-    OP_STI,     // store indirect
-    OP_JMP,     // jump
-    // OP_RES,   // reserved (unused)
-    OP_LEA = 14, // load effective address
-    OP_TRAP,     // execute trap
-} OpCode;
-
-typedef enum {
-    TRAP_GETC = 0x20,  // get char from keyboard, not echoed onto the terminal
-    TRAP_OUT = 0x21,   // output a character
-    TRAP_PUTS = 0x22,  // output a word string
-    TRAP_IN = 0x23,    // get char from keyboard, echoed onto the terminal
-    TRAP_PUTSP = 0x24, // output a byte string
-    TRAP_HALT = 0x25,  // halt the program
-} Trap;
-
-typedef enum {
-    KEYBOARD_STATUS = 0xFE00,
-    KEYBOARD_DATA = 0xFE02,
-} MemoryMap;
-
-typedef enum {
-    FL_POS = 1 << 0,
-    FL_ZERO = 1 << 1,
-    FL_NEG = 1 << 2,
-} CondFlag;
-
-typedef enum {
-    DEAD = 0,
-    ALIVE,
-} Status;
-
-static u16    MEM[U16_MAX] = {0};
-static u16    REG[R_SIZE] = {0};
-static Status STATUS = ALIVE;
-
-#define PC_START 0x3000
-
-static u16 get_sign_extend(u16 x, u16 bit_count) {
-    if ((x >> (bit_count - 1)) & 1) {
-        x |= (u16)(U16_MAX << bit_count);
+static void set_flags(Register r) {
+    if (REG[r] == 0) {
+        REG[R_COND] = FL_ZERO;
+    } else if (REG[r] >> 15) {
+        /* NOTE: A `1` in the left-most bit indicates negative. */
+        REG[R_COND] = FL_NEG;
+    } else {
+        REG[R_COND] = FL_POS;
     }
-    return x;
 }
 
-static OpCode get_op(u16 instr) {
-    return instr >> 12;
+static Bool poll_keyboard(void) {
+    FdSet file_descriptors;
+    FD_ZERO(&file_descriptors);
+    FD_SET(STDIN_FILENO, &file_descriptors);
+    TimeVal timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    return select(1, &file_descriptors, NULL, NULL, &timeout) != 0;
 }
 
-static u8 get_r0_or_nzp(u16 instr) {
-    return (instr >> 9) & 0x7;
+static u16 get_mem_at(u16 address) {
+    if (address == KEYBOARD_STATUS) {
+        if (poll_keyboard()) {
+            MEM[KEYBOARD_STATUS] = (1 << 15);
+            MEM[KEYBOARD_DATA] = (u16)getchar();
+        } else {
+            MEM[KEYBOARD_STATUS] = 0;
+        }
+    }
+    return MEM[address];
 }
 
-static u8 get_r1(u16 instr) {
-    return (instr >> 6) & 0x7;
+static void do_op_branch(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   0   0 | N | Z | P |             PC_OFFSET             |
+    // +---------------+---+---+---+-----------------------------------+
+    if (REG[R_COND] & get_r0_or_nzp(instr)) {
+        REG[R_PC] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
+    }
 }
 
-static u8 get_r2(u16 instr) {
-    return instr & 0x7;
+static void do_op_add(u16 instr) {
+    const u8 r0 = get_r0_or_nzp(instr);
+    const u8 r1 = get_r1(instr);
+    if (get_immediate_mode(instr)) {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   0   0   1 |     R0    |     R1    | 1 |     IMMEDIATE     |
+        // +---------------+-----------+-----------+---+-------------------+
+        REG[r0] = (u16)(REG[r1] + get_immediate(instr));
+    } else {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   0   0   1 |     R0    |     R1    | 0 |  NULL |     R2    |
+        // +---------------+-----------+-----------+---+-------+-----------+
+        REG[r0] = (u16)(REG[r1] + REG[get_r2(instr)]);
+    }
+    set_flags(r0);
 }
 
-static Bool get_immediate_mode(u16 instr) {
-    return (instr >> 5) & 0x1;
+static void do_op_load(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   1   0 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    const u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] = get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)));
+    set_flags(r0);
 }
 
-static i8 get_immediate(u16 instr) {
-    return (i8)get_sign_extend(instr & 0x1F, 5);
+static void do_op_store(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    MEM[REG[R_PC] + get_pc_offset_9(instr)] = REG[get_r0_or_nzp(instr)];
 }
 
-static i16 get_pc_offset_9(u16 instr) {
-    return (i16)get_sign_extend(instr & 0x1FF, 9);
+static void do_op_jump_subroutine(u16 instr) {
+    REG[R_7] = REG[R_PC];
+    if (get_relative_mode(instr)) {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   1   0   0 | 1 |                 PC_OFFSET                 |
+        // +---------------+---+-------------------------------------------+
+        REG[R_PC] = (u16)(REG[R_PC] + get_pc_offset_11(instr));
+    } else {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   1   0   0 | 0 |  NULL |     R1    |          NULL         |
+        // +---------------+---+-------+-----------+-----------------------+
+        REG[R_PC] = REG[get_r1(instr)];
+    }
 }
 
-static Bool get_relative_mode(u16 instr) {
-    return (instr >> 11) & 0x1;
+static void do_op_and(u16 instr) {
+    const u8 r0 = get_r0_or_nzp(instr);
+    const u8 r1 = get_r1(instr);
+    if (get_immediate_mode(instr)) {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   1   0   1 |     R0    |     R1    | 1 |     IMMEDIATE     |
+        // +---------------+-----------+-----------+---+-------------------+
+        REG[r0] = (u16)(REG[r1] & get_immediate(instr));
+    } else {
+        // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+        // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+        // | 0   1   0   1 |     R0    |     R1    | 0 |  NULL |     R2    |
+        // +---------------+-----------+-----------+---+-------+-----------+
+        REG[r0] = (u16)(REG[r1] & REG[get_r2(instr)]);
+    }
+    set_flags(r0);
 }
 
-static i16 get_pc_offset_11(u16 instr) {
-    return (i16)get_sign_extend(instr & 0x7FF, 11);
+static void do_op_load_register(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   0 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    const u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] = get_mem_at((u16)(REG[get_r1(instr)] + get_reg_offset_6(instr)));
+    set_flags(r0);
 }
 
-static i16 get_reg_offset_6(u16 instr) {
-    return (i16)get_sign_extend(instr & 0x3F, 6);
+static void do_op_store_register(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 0   1   1   1 |     R0    |     R1    |         OFFSET        |
+    // +---------------+-----------+-----------+-----------------------+
+    MEM[REG[get_r1(instr)] + get_reg_offset_6(instr)] =
+        REG[get_r0_or_nzp(instr)];
 }
 
-static Trap get_trap(u16 instr) {
-    return (Trap)(instr & 0xFF);
+static void do_op_not(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   0   1 |     R0    |     R1    |          NULL         |
+    // +---------------+-----------+-----------+-----------------------+
+    const u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] = (u16)(~REG[get_r1(instr)]);
+    set_flags(r0);
+}
+
+static void do_op_load_indirect(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   1   0 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    const u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] =
+        get_mem_at(get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr))));
+    set_flags(r0);
+}
+
+static void do_op_store_indirect(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   0   1   1 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    MEM[get_mem_at((u16)(REG[R_PC] + get_pc_offset_9(instr)))] =
+        REG[get_r0_or_nzp(instr)];
+}
+
+static void do_op_jump(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   0   0 |    NULL   |     R1    |          NULL         |
+    // +---------------+-----------+-----------------------------------+
+    REG[R_PC] = REG[get_r1(instr)];
+}
+
+static void do_op_load_effective_address(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   1   0 |     R0    |             PC_OFFSET             |
+    // +---------------+-----------+-----------------------------------+
+    const u8 r0 = get_r0_or_nzp(instr);
+    REG[r0] = (u16)(REG[R_PC] + get_pc_offset_9(instr));
+    set_flags(r0);
+}
+
+static void do_op_trap(u16 instr) {
+    // | 15| 14| 13| 12| 11| 10| 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+    // +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+    // | 1   1   1   1 |      NULL     |              TRAP             |
+    // +---------------+---------------+-------------------------------+
+    switch (get_trap(instr)) {
+    case TRAP_GETC: {
+        REG[R_0] = (u16)getchar();
+        break;
+    }
+    case TRAP_OUT: {
+        putc((char)REG[R_0], stdout);
+        fflush(stdout);
+        break;
+    }
+    case TRAP_PUTS: {
+        for (u16* x = MEM + REG[R_0]; *x; ++x) {
+            putc((char)*x, stdout);
+        }
+        fflush(stdout);
+        break;
+    }
+    case TRAP_IN: {
+        printf("Enter a character: ");
+        const char x = (char)getchar();
+        putc(x, stdout);
+        REG[R_0] = (u16)x;
+        break;
+    }
+    case TRAP_PUTSP: {
+        for (u16* x = MEM + REG[R_0]; *x; ++x) {
+            const char a = (char)((*x) & 0xFF);
+            putc(a, stdout);
+            const char b = (char)((*x) >> 8);
+            if (b) {
+                putc(b, stdout);
+            }
+        }
+        fflush(stdout);
+        break;
+    }
+    case TRAP_HALT: {
+        puts("HALT");
+        fflush(stdout);
+        STATUS = DEAD;
+        break;
+    }
+    }
+}
+
+static void do_bin_instr(u16 instr) {
+    switch (get_op(instr)) {
+    case OP_BR: {
+        do_op_branch(instr);
+        break;
+    }
+    case OP_ADD: {
+        do_op_add(instr);
+        break;
+    }
+    case OP_LD: {
+        do_op_load(instr);
+        break;
+    }
+    case OP_ST: {
+        do_op_store(instr);
+        break;
+    }
+    case OP_JSR: {
+        do_op_jump_subroutine(instr);
+        break;
+    }
+    case OP_AND: {
+        do_op_and(instr);
+        break;
+    }
+    case OP_LDR: {
+        do_op_load_register(instr);
+        break;
+    }
+    case OP_STR: {
+        do_op_store_register(instr);
+        break;
+    }
+    case OP_NOT: {
+        do_op_not(instr);
+        break;
+    }
+    case OP_LDI: {
+        do_op_load_indirect(instr);
+        break;
+    }
+    case OP_STI: {
+        do_op_store_indirect(instr);
+        break;
+    }
+    case OP_JMP: {
+        do_op_jump(instr);
+        break;
+    }
+    case OP_LEA: {
+        do_op_load_effective_address(instr);
+        break;
+    }
+    case OP_TRAP: {
+        do_op_trap(instr);
+        break;
+    }
+    }
+}
+
+static void disable_input_buffering(void) {
+    tcgetattr(STDIN_FILENO, &TERMINAL);
+    TermIos terminal = TERMINAL;
+    terminal.c_lflag = (TcFlag)(terminal.c_lflag & (TcFlag)(~ICANON & ~ECHO));
+    tcsetattr(STDIN_FILENO, TCSANOW, &terminal);
+}
+
+static void restore_input_buffering(void) {
+    tcsetattr(STDIN_FILENO, TCSANOW, &TERMINAL);
+}
+
+static void handle_interrupt(i32 _) {
+    restore_input_buffering();
+    printf("\n");
+    exit(EXIT_FAILURE);
+}
+
+static void set_bytecode(File* file) {
+    u16 origin;
+    if (fread(&origin, sizeof(u16), 1, file) == 0) {
+        exit(EXIT_FAILURE);
+    }
+    /* NOTE: See `https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html`. */
+    origin = __builtin_bswap16(origin);
+    u16*  index = MEM + origin;
+    usize bytes = fread(index, sizeof(u16), (usize)(U16_MAX - origin), file);
+    if (bytes == 0) {
+        exit(EXIT_FAILURE);
+    }
+    while (0 < bytes--) {
+        *index = __builtin_bswap16(*index);
+        ++index;
+    }
 }
 
 #endif
